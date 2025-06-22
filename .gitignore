@@ -1,0 +1,19 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically
+*.out
+
+# Local development and debug files
+Debug.txt
+scratch.txt
+
+# The compiled application binary (matches the module name)
+my-nats-app
