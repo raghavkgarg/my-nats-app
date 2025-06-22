@@ -14,6 +14,7 @@
 # Local development and debug files
 Debug.txt
 scratch.txt
+Git for Dummies.txt
 
 # The compiled application binary (matches the module name)
 my-nats-app
