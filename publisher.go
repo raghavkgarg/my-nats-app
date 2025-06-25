@@ -17,7 +17,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error connecting to NATS at %s: %v", cfg.NatsURL, err)
 	}
-	defer nc.Close() // Close the connection when main exits.
+	defer nc.Close() // Close the connection when main exits just testing git
 
 	log.Println("Connected to NATS server at", nc.ConnectedUrl())
 
