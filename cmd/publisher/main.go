@@ -2,15 +2,21 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"log"
 	"os"
 	"time"
 
+	"my-nats-app/internal/config"
 	"github.com/nats-io/nats.go"
 )
 
 func main() {
-	cfg := LoadConfig()
+	// Define a command-line flag for the input file path.
+	inputFile := flag.String("file", "input.txt", "Path to the input file containing messages.")
+	flag.Parse()
+
+	cfg := config.Load()
 
 	// Connect to a NATS server.
 	nc, err := nats.Connect(cfg.NatsURL)
@@ -21,16 +27,14 @@ func main() {
 
 	log.Println("Connected to NATS server at", nc.ConnectedUrl())
 
-	inputFile := "input.txt" // The file to read messages from.
-
 	// Open the input file
-	file, err := os.Open(inputFile)
+	file, err := os.Open(*inputFile)
 	if err != nil {
-		log.Fatalf("Error opening input file '%s': %v", inputFile, err)
+		log.Fatalf("Error opening input file '%s': %v", *inputFile, err)
 	}
 	defer file.Close()
 
-	log.Printf("Reading messages from '%s' and publishing to subject [%s]", inputFile, cfg.NatsSubject)
+	log.Printf("Reading messages from '%s' and publishing to subject [%s]", *inputFile, cfg.NatsSubject)
 
 	scanner := bufio.NewScanner(file)
 	lineNumber := 0
@@ -52,7 +56,7 @@ func main() {
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading from input file '%s': %v", inputFile, err)
+		log.Printf("Error reading from input file '%s': %v", *inputFile, err)
 	}
 
 	if err := nc.FlushTimeout(5 * time.Second); err != nil {

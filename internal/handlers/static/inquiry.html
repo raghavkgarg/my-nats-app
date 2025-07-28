@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Inquiry Form</title>
+        <link rel="stylesheet" href="/style.css" />
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const form = document.getElementById("inquiryForm");
+                const resultsDiv = document.getElementById("results");
+
+                form.addEventListener("submit", async function (e) {
+                    e.preventDefault();
+                    resultsDiv.innerHTML = "Searching...";
+                    resultsDiv.className = "";
+
+                    try {
+                        const formData = new FormData(form);
+                        const params = new URLSearchParams(formData);
+
+                        // We use a GET request for a search operation
+                        const response = await fetch(
+                            `/inquiry?${params.toString()}`,
+                            {
+                                method: "GET",
+                                headers: {
+                                    Accept: "application/json",
+                                },
+                            },
+                        );
+
+                        if (response.ok) {
+                            const results = await response.json();
+                            if (results && results.length > 0) {
+                                let html = "<h3>Results:</h3><ul>";
+                                results.forEach((item) => {
+                                    // The JSON from the server has `ledger_mtrs` and `received_at`
+                                    html += `<li>Ledger Mtrs: <strong>${item.ledger_mtrs}</strong> (Received at: ${new Date(item.received_at).toLocaleString()})</li>`;
+                                });
+                                html += "</ul>";
+                                resultsDiv.innerHTML = html;
+                            } else {
+                                resultsDiv.className = "info";
+                                resultsDiv.textContent =
+                                    "No records found for that Ledger Code.";
+                            }
+                        } else {
+                            const errorText = await response.text();
+                            resultsDiv.className = "error";
+                            resultsDiv.textContent = `Error: ${errorText}`;
+                        }
+                    } catch (error) {
+                        console.error("Error:", error);
+                        resultsDiv.className = "error";
+                        resultsDiv.textContent =
+                            "An error occurred. Please try again.";
+                    }
+                });
+            });
+        </script>
+        <style>
+            /* Basic styles for feedback messages */
+            .info,
+            .error {
+                padding: 10px;
+                margin-top: 10px;
+                border-radius: 4px;
+            }
+            .info {
+                background-color: #d9edf7;
+                color: #31708f;
+            }
+            .error {
+                background-color: #f2dede;
+                color: #a94442;
+            }
+            ul {
+                list-style-type: disc;
+                padding-left: 20px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Inquire by Ledger Code</h1>
+            <p>
+                <a href="/">&larr; Back to Data Entry</a> |
+                <a href="/delete-page">Go to Delete Page</a>
+            </p>
+            <form id="inquiryForm">
+                <div class="form-group">
+                    <label for="ledgerCode">Ledger Code:</label>
+                    <input
+                        type="text"
+                        id="ledgerCode"
+                        name="ledger_code"
+                        pattern="[0-9]+"
+                        title="Please enter a numeric ledger code"
+                        required
+                    />
+                </div>
+                <button type="submit">Search</button>
+            </form>
+            <div id="results"></div>
+        </div>
+    </body>
+</html>

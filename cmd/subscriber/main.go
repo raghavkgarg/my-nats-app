@@ -6,17 +6,19 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"sync/atomic"
 	"syscall"
 	"time"
 
+	"my-nats-app/internal/config"
+	"my-nats-app/internal/db"
+	"my-nats-app/internal/models"
+
 	"github.com/nats-io/nats.go"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func main() {
-	cfg := LoadConfig()
+	cfg := config.Load()
 
 	// --- NATS Setup ---
 	nc, err := nats.Connect(cfg.NatsURL)
@@ -28,31 +30,18 @@ func main() {
 	log.Println("Connected to NATS server at", nc.ConnectedUrl())
 
 	// --- MongoDB Setup ---
-	// Use a context with a timeout for the connection and operations
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	clientOptions := options.Client().ApplyURI(cfg.MongoURI)
-	mongoClient, err := mongo.Connect(ctx, clientOptions)
+	mongoClient, err := db.ConnectMongo(cfg.MongoURI)
 	if err != nil {
 		log.Fatalf("Error connecting to MongoDB: %v", err)
 	}
+	ctx := context.Background()
 	defer func() {
 		if err = mongoClient.Disconnect(ctx); err != nil {
 			log.Printf("Error disconnecting from MongoDB: %v", err)
 		}
 	}()
 
-	// Ping MongoDB to verify connection
-	err = mongoClient.Ping(ctx, nil)
-	if err != nil {
-		log.Fatalf("Error pinging MongoDB: %v", err)
-	}
-	log.Println("Connected to MongoDB!")
-
 	collection := mongoClient.Database(cfg.MongoDatabase).Collection(cfg.MongoCollection)
-
-	var accountIDCounter uint64 = 0 // Simple counter for unique account IDs
 
 	sub, err := nc.Subscribe(cfg.NatsSubject, func(msg *nats.Msg) {
 		// Message data processing
@@ -63,7 +52,7 @@ func main() {
 		var accMtr string
 		if len(alldata) >= 7 {
 			accStr := alldata[4:7] // e.g., "abc" from "xxxxabc"
-			accMtr = alldata[0:4] // e.g., "xxxx" from "xxxxabc"
+			accMtr = alldata[0:4]  // e.g., "xxxx" from "xxxxabc"
 
 			var convErr error
 			acc, convErr = strconv.Atoi(accStr)
@@ -77,28 +66,29 @@ func main() {
 			return // Skip processing this message
 		}
 
-		// Increment account ID for uniqueness in this demo
-		currentAccountID := atomic.AddUint64(&accountIDCounter, 1)
-
 		// Prepare data for MongoDB
 		if acc != 123 {
-			messageDocument := MessageDocument{
-				MessageID:  currentAccountID,
+			messageDocument := models.MessageDocument{
+				MessageID:  primitive.NewObjectID(), // Changed to use ObjectID
 				LedgerCode: acc,
 				LedgerMtrs: accMtr,
 				RawMessage: alldata,
 				ReceivedAt: time.Now(),
 			}
+
 			// Insert the document into MongoDB using the struct
-			insertResult, err := collection.InsertOne(ctx, messageDocument)
+			insertCtx, insertCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer insertCancel()
+
+			insertResult, err := collection.InsertOne(insertCtx, messageDocument)
 			if err != nil {
-				log.Printf("MongoDB | Error inserting document for message_id %d: %v", currentAccountID, err)
+				log.Printf("MongoDB | Error inserting document: %v", err)
 				return
 			}
 			if insertResult.InsertedID != nil {
-				log.Printf("MongoDB | Inserted document for message_id %d with _id: %v", currentAccountID, insertResult.InsertedID)
+				log.Printf("MongoDB | Inserted document with _id: %v", insertResult.InsertedID)
 			} else {
-				log.Printf("MongoDB | Inserted document for message_id %d, but InsertedID is nil", currentAccountID)
+				log.Printf("MongoDB | Inserted document, but InsertedID is nil")
 			}
 		}
 	})

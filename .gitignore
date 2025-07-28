@@ -1,4 +1,4 @@
-# Binaries for programs and plugins
+# Compiled Go binaries
 *.exe
 *.exe~
 *.dll
@@ -8,14 +8,26 @@
 # Test binary, built with `go test -c`
 *.test
 
-# Output of the go coverage tool, specifically
+# Output of the go coverage tool
 *.out
 
-# Local development and debug files
-Debug.txt
-scratch.txt
-Git for Dummies.txt
+# Compiled application binaries.
+# The README.md specifies building into a `bin/` directory.
+/bin/
 
-# The compiled application binary (matches the module name)
+# An executable that might be created by `go build` in the project root.
 my-nats-app
+
+# Dependency directory created by `go mod vendor`.
+# It's common practice to not commit this directory and let `go mod` handle it.
+/vendor/
+
+# Local environment variables. It's a security risk to commit these.
+.env
+
+# IDE-specific configuration files
+.idea/
+.vscode/
+
+# OS-specific files
 .DS_Store

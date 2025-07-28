@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Message Entry Form</title>
+        <link rel="stylesheet" href="/style.css" />
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                const form = document.getElementById("dataForm");
+                const messageDiv = document.getElementById("message");
+
+                form.addEventListener("submit", async function (e) {
+                    e.preventDefault();
+                    messageDiv.textContent = "Submitting...";
+
+                    try {
+                        const formData = new FormData(form);
+                        const response = await fetch("/store", {
+                            method: "POST",
+                            headers: {
+                                Accept: "application/json",
+                                "Content-Type":
+                                    "application/x-www-form-urlencoded",
+                            },
+                            body: new URLSearchParams(formData),
+                        });
+
+                        if (response.ok) {
+                            const result = await response.json();
+                            messageDiv.className = "success";
+                            messageDiv.textContent = `Success! Data saved with ID: ${result.message_id}`;
+                            form.reset();
+                        } else {
+                            // Handle plain text error responses gracefully
+                            const errorText = await response.text();
+                            const result = { error: errorText };
+                            messageDiv.className = "error";
+                            messageDiv.textContent =
+                                result.error || "Submission failed";
+                        }
+                    } catch (error) {
+                        console.error("Error:", error);
+                        messageDiv.className = "error";
+                        messageDiv.textContent =
+                            "Error submitting form. Please try again.";
+                    }
+                });
+            });
+        </script>
+        <style>
+            /* ...existing styles... */
+
+            .success {
+                padding: 10px;
+                margin-top: 10px;
+                background-color: #dff0d8;
+                color: #3c763d;
+                border-radius: 4px;
+            }
+
+            .error {
+                padding: 10px;
+                margin-top: 10px;
+                background-color: #f2dede;
+                color: #a94442;
+                border-radius: 4px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Enter Message Data</h1>
+            <p>
+                <a href="/inquiry-page">Go to Inquiry Page</a> |
+                <a href="/delete-page">Go to Delete Page</a>
+            </p>
+            <form id="dataForm" method="POST" action="/store">
+                <div class="form-group">
+                    <label for="ledgerCode">Ledger Code (3 digits):</label>
+                    <input
+                        type="text"
+                        id="ledgerCode"
+                        name="ledger_code"
+                        pattern="[0-9]{3}"
+                        title="Please enter exactly 3 digits"
+                        required
+                    />
+                </div>
+                <div class="form-group">
+                    <label for="ledgerMtrs">Ledger Mtrs (4 characters):</label>
+                    <input
+                        type="text"
+                        id="ledgerMtrs"
+                        name="ledger_mtrs"
+                        pattern=".{4,4}"
+                        title="Please enter exactly 4 characters"
+                        required
+                    />
+                </div>
+                <button type="submit">Submit</button>
+            </form>
+            <div id="message"></div>
+        </div>
+    </body>
+</html>

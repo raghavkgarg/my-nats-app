@@ -3,49 +3,34 @@ package main
 import (
 	"context"
 	"log"
-	"os" // Import for accessing command-line arguments
-	"strconv" // Import for converting string to int
+	"os"
+	"strconv"
 	"time"
 
+	"my-nats-app/internal/config"
+	"my-nats-app/internal/db"
+
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func main() {
-	cfg := LoadConfig()
+	cfg := config.Load()
 
 	// --- MongoDB Setup ---
-	clientOptions := options.Client().ApplyURI(cfg.MongoURI)
-
-	// Use a context with a timeout for the connection
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	mongoClient, err := mongo.Connect(ctx, clientOptions)
+	mongoClient, err := db.ConnectMongo(cfg.MongoURI)
 	if err != nil {
-		log.Fatalf("Error connecting to MongoDB: %v", err)
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
+	ctx := context.Background()
 	defer func() {
 		if err = mongoClient.Disconnect(ctx); err != nil {
 			log.Printf("Error disconnecting from MongoDB: %v", err)
 		}
 	}()
 
-	err = mongoClient.Ping(ctx, nil)
-	if err != nil {
-		log.Fatalf("Error pinging MongoDB: %v", err)
-	}
-	log.Println("Connected to MongoDB!")
-
 	collection := mongoClient.Database(cfg.MongoDatabase).Collection(cfg.MongoCollection)
 
 	// --- Ledger Code Input ---
-	// For this example, we'll hardcode the ledger code.
-	// We will now take this from command-line arguments.
-	// ledgerCodeToDelete := 123 // <<-- This will be replaced
-
-	// Example for command-line input (uncomment and adapt if needed):
 	if len(os.Args) < 2 {
 		log.Fatal("Usage: go run delete.go <ledger_code_to_delete>")
 	}
@@ -60,7 +45,10 @@ func main() {
 	// --- Deletion Logic ---
 	filter := bson.M{"ledger_code": ledgerCodeToDelete}
 
-	deleteResult, err := collection.DeleteMany(ctx, filter)
+	deleteCtx, deleteCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer deleteCancel()
+
+	deleteResult, err := collection.DeleteMany(deleteCtx, filter)
 	if err != nil {
 		log.Fatalf("Error deleting documents: %v", err)
 	}
