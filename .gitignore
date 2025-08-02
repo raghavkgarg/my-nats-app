@@ -9,21 +9,14 @@
 Debug.txt
 scratch.txt
 
-# The compiled application binary (matches the module name)
-my-nats-app
-.DS_Store
-
 # Test binary, built with `go test -c`
 *.test
 
 # Output of the go coverage tool
 *.out
 
-# Compiled application binaries.
-# The README.md specifies building into a `bin/` directory.
+# Compiled application binaries
 /bin/
-
-# An executable that might be created by `go build` in the project root.
 my-nats-app
 
 # Dependency directory created by `go mod vendor`.
@@ -37,5 +30,5 @@ my-nats-app
 .idea/
 .vscode/
 
-# OS-specific files
+# OS-specific files (e.g., macOS)
 .DS_Store
