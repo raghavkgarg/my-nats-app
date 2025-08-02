@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -16,6 +17,40 @@ import (
 	"github.com/nats-io/nats.go"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+// processMessage parses a raw message, validates it, and transforms it into a MessageDocument.
+// It returns a non-nil document if it's valid and should be stored.
+// It returns (nil, nil) if the message should be skipped (e.g., filtered ledger code).
+// It returns (nil, error) if the message is malformed.
+func processMessage(data []byte) (*models.MessageDocument, error) {
+	alldata := string(data)
+
+	if len(alldata) < 7 {
+		return nil, fmt.Errorf("data '%s' is too short", alldata)
+	}
+
+	accStr := alldata[4:7]
+	accMtr := alldata[0:4]
+
+	acc, err := strconv.Atoi(accStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert ledger code '%s' to int: %w", accStr, err)
+	}
+
+	// Filter out messages with ledger code 123
+	if acc == 123 {
+		log.Printf("NATS | Filtering out message with ledger code 123: %s", alldata)
+		return nil, nil // Not an error, just skipping
+	}
+
+	return &models.MessageDocument{
+		MessageID:  primitive.NewObjectID(),
+		LedgerCode: acc,
+		LedgerMtrs: accMtr,
+		RawMessage: alldata,
+		ReceivedAt: time.Now(),
+	}, nil
+}
 
 func main() {
 	cfg := config.Load()
@@ -44,52 +79,28 @@ func main() {
 	collection := mongoClient.Database(cfg.MongoDatabase).Collection(cfg.MongoCollection)
 
 	sub, err := nc.Subscribe(cfg.NatsSubject, func(msg *nats.Msg) {
-		// Message data processing
-		alldata := string(msg.Data)
-		log.Printf("NATS | Received data: '%s'", alldata)
+		log.Printf("NATS | Received data: '%s'", string(msg.Data))
 
-		var acc int
-		var accMtr string
-		if len(alldata) >= 7 {
-			accStr := alldata[4:7] // e.g., "abc" from "xxxxabc"
-			accMtr = alldata[0:4]  // e.g., "xxxx" from "xxxxabc"
-
-			var convErr error
-			acc, convErr = strconv.Atoi(accStr)
-			if convErr != nil {
-				log.Printf("NATS | Failed to convert '%s' to int for acc: %v. Skipping message.", accStr, convErr)
-				return // Skip processing this message, don't crash the subscriber
-			}
-			log.Printf("NATS | Extracted acc: %d", acc)
-		} else {
-			log.Printf("NATS | Data '%s' too short to extract 'acc'. Skipping message.", alldata)
-			return // Skip processing this message
+		messageDocument, err := processMessage(msg.Data)
+		if err != nil {
+			log.Printf("NATS | Invalid message format: %v. Skipping.", err)
+			return
 		}
 
-		// Prepare data for MongoDB
-		if acc != 123 {
-			messageDocument := models.MessageDocument{
-				MessageID:  primitive.NewObjectID(), // Changed to use ObjectID
-				LedgerCode: acc,
-				LedgerMtrs: accMtr,
-				RawMessage: alldata,
-				ReceivedAt: time.Now(),
-			}
+		// If document is nil, it means the message was valid but filtered out.
+		if messageDocument == nil {
+			return
+		}
 
-			// Insert the document into MongoDB using the struct
-			insertCtx, insertCancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer insertCancel()
+		// Insert the document into MongoDB
+		insertCtx, insertCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer insertCancel()
 
-			insertResult, err := collection.InsertOne(insertCtx, messageDocument)
-			if err != nil {
-				log.Printf("MongoDB | Error inserting document: %v", err)
-				return
-			}
-			if insertResult.InsertedID != nil {
-				log.Printf("MongoDB | Inserted document with _id: %v", insertResult.InsertedID)
-			} else {
-				log.Printf("MongoDB | Inserted document, but InsertedID is nil")
-			}
+		insertResult, err := collection.InsertOne(insertCtx, messageDocument)
+		if err != nil {
+			log.Printf("MongoDB | Error inserting document: %v", err)
+		} else if insertResult.InsertedID != nil {
+			log.Printf("MongoDB | Inserted document with _id: %v", insertResult.InsertedID)
 		}
 	})
 	if err != nil {
